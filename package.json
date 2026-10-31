@@ -1,24 +1,28 @@
 {
   "name": "bnbbot",
-  "version": "1.0.0",
-  "description": "",
-  "main": "index.js",
+  "version": "2.0.0",
+  "description": "Universal Binance Agentic Wallet Automation Engine",
+  "main": "src/index.js",
   "scripts": {
     "start": "node mint_bot.js",
-    "test": "echo \"Error: no test specified\" && exit 1"
+    "dev": "node --watch mint_bot.js",
+    "test": "node --test tests/engine.test.js tests/implementation.test.js"
   },
   "repository": {
     "type": "git",
-    "url": "git+https://github.com/ferdlcx/bnbbot.git"
+    "url": "git+https://github.com/ferdlcx/bnsabdfhy32.git"
   },
-  "keywords": [],
-  "author": "",
+  "keywords": [
+    "binance-agentic-wallet",
+    "baw",
+    "web3-automation",
+    "bnb-chain",
+    "mochi",
+    "telegram-bot"
+  ],
+  "author": "ferdlcx",
   "license": "ISC",
   "type": "commonjs",
-  "bugs": {
-    "url": "https://github.com/ferdlcx/bnbbot/issues"
-  },
-  "homepage": "https://github.com/ferdlcx/bnbbot#readme",
   "dependencies": {
     "@google/genai": "^2.32.0",
     "telegraf": "^4.16.3"

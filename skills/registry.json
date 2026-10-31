@@ -1,0 +1,98 @@
+{
+  "schemaVersion": "1.0.0",
+  "updatedAt": "2026-10-31T04:36:04.701Z",
+  "skills": {
+    "binance-agentic-wallet": {
+      "slug": "binance-agentic-wallet",
+      "projectName": "Binance Agentic Wallet (Official Core)",
+      "sourceUrl": "https://raw.githubusercontent.com/binance/binance-skills-hub/main/skills/binance-web3/binance-agentic-wallet/SKILL.md",
+      "version": "1.15.0",
+      "lastUpdated": "2026-10-31T04:35:31.245Z",
+      "network": {
+        "name": "Multi-Chain (BSC, ETH, Solana, Base, Arbitrum)",
+        "chainId": "56"
+      },
+      "apiEndpoints": {},
+      "contracts": {
+        "usdt": "0x55d398326f99059fF775485246999027B3197955",
+        "usdc": "0x8AC76a51cc950d9822D68b83fE1Ad97B32Cd580d"
+      },
+      "functions": [
+        {
+          "name": "wallet status",
+          "selector": null
+        },
+        {
+          "name": "wallet balance",
+          "selector": null
+        },
+        {
+          "name": "contract-call preview/execute",
+          "selector": null
+        }
+      ],
+      "requiredConditions": [
+        "baw CLI >= 1.12.0",
+        "MPC Session Connected"
+      ],
+      "adapter": "core-wallet",
+      "validationStatus": "VALIDATED",
+      "contentHash": "builtin-baw-v1.15.0"
+    },
+    "mochi": {
+      "slug": "mochi",
+      "projectName": "MOCHI",
+      "sourceUrl": "https://agenticmochi.xyz/SKILL.md",
+      "version": "1.0.2",
+      "lastUpdated": "2026-10-31T04:36:04.700Z",
+      "network": {
+        "name": "BNB Smart Chain",
+        "chainId": "56"
+      },
+      "apiEndpoints": {
+        "stats": "https://agenticmochi.xyz/api/stats",
+        "verify": "https://agenticmochi.xyz/api/verify?address=<wallet",
+        "activity": "https://agenticmochi.xyz/api/activity"
+      },
+      "contracts": {
+        "mint": "0x045398ef956b4787c782f77319ab0a20cb637da0",
+        "paymentToken": "0x55d398326f99059fF775485246999027B3197955",
+        "token": "0x0Eb18EA6Bd86F994FEC4F3580B5206F972433364",
+        "treasury": "0x17c09Ccd7Aa0A8CA01d4FaD3E00012E2Bb48E3c8"
+      },
+      "functions": [
+        {
+          "signature": "quoteFor(uint256 agentId, uint256 shares)",
+          "selector": "0x207c8371"
+        },
+        {
+          "signature": "quote(uint256 shares)",
+          "selector": "0xed1bd76c"
+        },
+        {
+          "signature": "quoteFor(uint256 agentId, uint256 shares)",
+          "selector": "0x207c8371"
+        },
+        {
+          "signature": "approve(address spender, uint256 amount)",
+          "selector": "0x095ea7b3"
+        },
+        {
+          "signature": "mint(uint256 shares, address referrer, uint256 maxCost)",
+          "selector": "0x836a1040"
+        }
+      ],
+      "requiredConditions": [
+        "Requires .ai Agent ID",
+        "Max 10 shares per transaction",
+        "Quota 10 shares per identity",
+        "Free first share available (maxCost = 0)"
+      ],
+      "adapter": "mochi",
+      "validationStatus": "VALIDATED",
+      "contentHash": "b91deb72cd7a5c0a55f5b90559eba5401b8430d05bea065378ba92088489b809",
+      "validationIssues": [],
+      "validationWarnings": []
+    }
+  }
+}

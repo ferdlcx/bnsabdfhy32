@@ -7,7 +7,11 @@ const MOCHI_CONTRACT = "0x0Eb18EA6Bd86F994FEC4F3580B5206F972433364";
 const MINT_SELECTOR = "0x836a1040";
 const APPROVE_SELECTOR = "0x095ea7b3";
 const QUOTE_FOR_SELECTOR = "0x207c8371";
-const BSC_RPC_URL = "https://bsc-dataseed.binance.org";
+const BSC_RPC_URLS = [
+  process.env.BSC_RPC_URL || "https://bsc-rpc.publicnode.com",
+  "https://bsc-dataseed.binance.org",
+  "https://1rpc.io/bnb",
+];
 const USDT_DECIMALS = 18;
 
 async function fetchResponse(url, fetchImpl = fetch) {
@@ -29,25 +33,40 @@ async function fetchMochiGuide(fetchImpl = fetch) {
   ];
   const normalizedGuide = guide.toLowerCase();
   if (requiredValues.some((value) => !normalizedGuide.includes(value))) {
-    throw new Error("Panduan MOCHI berubah atau tidak cocok dengan kontrak yang diizinkan; transaksi dihentikan untuk ditinjau.");
+    throw new Error(
+      "Panduan MOCHI berubah atau tidak cocok dengan kontrak yang diizinkan; transaksi dihentikan untuk ditinjau."
+    );
   }
   return guide;
 }
 
 async function rpcCall(method, params, fetchImpl = fetch) {
-  const response = await fetchImpl(BSC_RPC_URL, {
-    method: "POST",
-    headers: { "Content-Type": "application/json" },
-    body: JSON.stringify({ jsonrpc: "2.0", id: 1, method, params }),
-    signal: AbortSignal.timeout(10000),
-  });
-  if (!response.ok) throw new Error(`RPC gagal (${response.status}).`);
-  const payload = await response.json();
-  if (payload.error) throw new Error(`RPC ${method} gagal: ${payload.error.message || payload.error.code}`);
-  if (payload.result === undefined || payload.result === null) {
-    throw new Error(`RPC ${method} tidak mengembalikan hasil.`);
+  let lastError = null;
+  const urls = [...new Set(BSC_RPC_URLS.filter(Boolean))];
+  for (const rpcUrl of urls) {
+    try {
+      const response = await fetchImpl(rpcUrl, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ jsonrpc: "2.0", id: 1, method, params }),
+        signal: AbortSignal.timeout(10000),
+      });
+      if (!response.ok) throw new Error(`RPC gagal (${response.status}).`);
+      const payload = await response.json();
+      if (payload.error) {
+        throw new Error(`RPC ${method} gagal: ${payload.error.message || payload.error.code}`);
+      }
+      if (payload.result === undefined || payload.result === null) {
+        throw new Error(`RPC ${method} tidak mengembalikan hasil.`);
+      }
+      return payload.result;
+    } catch (err) {
+      lastError = err;
+      // Jika fetchImpl adalah mock function di dalam unit test, jangan retry ke URL lain jika error memang disengaja
+      if (fetchImpl !== fetch) break;
+    }
   }
-  return payload.result;
+  throw lastError || new Error(`RPC ${method} gagal.`);
 }
 
 function encodeWord(value) {
@@ -62,7 +81,9 @@ function encodeAddress(address) {
 }
 
 function buildMintCalldata(shares, maxCost) {
-  return `${MINT_SELECTOR}${encodeWord(shares)}${encodeAddress("0x0000000000000000000000000000000000000000")}${encodeWord(maxCost)}`;
+  return `${MINT_SELECTOR}${encodeWord(shares)}${encodeAddress(
+    "0x0000000000000000000000000000000000000000"
+  )}${encodeWord(maxCost)}`;
 }
 
 function buildApprovalCalldata(amount) {
@@ -105,7 +126,9 @@ function assertDeveloperMode(settings) {
   const devMode = settings?.devMode;
   const expiresAt = timestampMilliseconds(devMode?.expiresAt);
   if (devMode?.enabled !== true || !Number.isFinite(expiresAt) || expiresAt <= Date.now()) {
-    throw new Error("Developer Mode tidak aktif atau sudah kedaluwarsa. Aktifkan di Binance App sebelum membuat preview transaksi.");
+    throw new Error(
+      "Developer Mode tidak aktif atau sudah kedaluwarsa. Aktifkan di Binance App sebelum membuat preview transaksi."
+    );
   }
 }
 
@@ -125,7 +148,9 @@ async function getMochiStatus({ runBawJson, fetchImpl = fetch }) {
   if (walletStatus.data?.status !== "CONNECTED") {
     throw new Error("Wallet BAW belum terhubung. Hubungkan wallet sebelum memakai fitur MOCHI.");
   }
-  const wallet = addresses.data?.addresses?.find((entry) => entry.binanceChainId === "56");
+  const wallet = addresses.data?.addresses?.find(
+    (entry) => String(entry.binanceChainId) === "56"
+  );
   if (!wallet || !/^0x[a-fA-F0-9]{40}$/.test(wallet.address)) {
     throw new Error("Alamat wallet BSC tidak ditemukan dari BAW.");
   }
@@ -145,8 +170,7 @@ async function getMochiStatus({ runBawJson, fetchImpl = fetch }) {
     throw new Error("Kontrak mint MOCHI tidak ditemukan di BNB Chain.");
   }
 
-  const allowanceData =
-    `0xdd62ed3e${encodeAddress(wallet.address)}${encodeAddress(MINT_CONTRACT)}`;
+  const allowanceData = `0xdd62ed3e${encodeAddress(wallet.address)}${encodeAddress(MINT_CONTRACT)}`;
   const allowanceHex = await rpcCall(
     "eth_call",
     [{ to: USDT_CONTRACT, data: allowanceData }, "latest"],
@@ -163,6 +187,8 @@ async function getMochiStatus({ runBawJson, fetchImpl = fetch }) {
     bnbRaw,
     usdtRaw,
     allowanceRaw,
+    fetchedAt: new Date().toISOString(),
+    sourceUrl: `${SITE_URL}/skill.md`,
   };
 }
 
@@ -182,7 +208,9 @@ async function estimateGasFee({ from, to, data, bnbRaw }, fetchImpl = fetch) {
   const feeRaw = bufferedGas * BigInt(gasPriceHex);
   if (bnbRaw < feeRaw) {
     throw new Error(
-      `BNB untuk gas belum cukup. Estimasi dengan buffer 20%: ${formatUnits(feeRaw)} BNB; saldo wallet: ${formatUnits(bnbRaw)} BNB. Tidak ada transaksi yang dibuat.`
+      `BNB untuk gas belum cukup. Estimasi dengan buffer 20%: ${formatUnits(
+        feeRaw
+      )} BNB; saldo wallet: ${formatUnits(bnbRaw)} BNB. Tidak ada transaksi yang dibuat.`
     );
   }
   return { estimate, bufferedGas, feeRaw };
@@ -196,12 +224,18 @@ async function prepareMochiTransaction({ shares, runBawJson, fetchImpl = fetch }
   const { eligibility } = status;
   if (eligibility.mintOpen !== true) throw new Error("Mint MOCHI sedang tidak dibuka.");
   if (eligibility.eligible !== true) {
-    const reasons = Array.isArray(eligibility.reasons) ? eligibility.reasons.join(", ") : "tidak memenuhi syarat";
+    const reasons = Array.isArray(eligibility.reasons)
+      ? eligibility.reasons.join(", ")
+      : "tidak memenuhi syarat";
     throw new Error(`Wallet belum eligible untuk mint MOCHI: ${reasons}.`);
   }
   const quotaRemaining = Number(eligibility.quotaRemaining);
   if (!Number.isInteger(quotaRemaining) || shares > quotaRemaining) {
-    throw new Error(`Kuota tersisa tidak cukup. Kuota saat ini: ${eligibility.quotaRemaining ?? "tidak tersedia"} share.`);
+    throw new Error(
+      `Kuota tersisa tidak cukup. Kuota saat ini: ${
+        eligibility.quotaRemaining ?? "tidak tersedia"
+      } share.`
+    );
   }
   assertDeveloperMode(status.settings);
 
@@ -209,53 +243,95 @@ async function prepareMochiTransaction({ shares, runBawJson, fetchImpl = fetch }
   const maxCost = await quoteMochiCost(agentId, shares, fetchImpl);
   if (status.usdtRaw < maxCost) {
     throw new Error(
-      `Saldo USDT tidak cukup. Quote ${shares} share: ${formatUnits(maxCost)} USDT; saldo: ${formatUnits(status.usdtRaw)} USDT. Tidak ada transaksi yang dibuat.`
+      `Saldo USDT tidak cukup. Quote ${shares} share: ${formatUnits(
+        maxCost
+      )} USDT; saldo: ${formatUnits(status.usdtRaw)} USDT. Tidak ada transaksi yang dibuat.`
     );
   }
 
   const approvalRequired = status.allowanceRaw < maxCost;
   if (approvalRequired && maxCost > 0n) {
     const calldata = buildApprovalCalldata(maxCost);
-    const gas = await estimateGasFee({
-      from: status.walletAddress,
-      to: USDT_CONTRACT,
-      data: calldata,
-      bnbRaw: status.bnbRaw,
-    }, fetchImpl);
+    const gas = await estimateGasFee(
+      {
+        from: status.walletAddress,
+        to: USDT_CONTRACT,
+        data: calldata,
+        bnbRaw: status.bnbRaw,
+      },
+      fetchImpl
+    );
     const preview = await runBawJson([
-      "contract-call", "preview", "--binanceChainId", "56",
-      "--from", status.walletAddress, "--to", USDT_CONTRACT,
-      "--value", "0", "--inputData", calldata, "--json",
+      "contract-call",
+      "preview",
+      "--binanceChainId",
+      "56",
+      "--from",
+      status.walletAddress,
+      "--to",
+      USDT_CONTRACT,
+      "--value",
+      "0",
+      "--inputData",
+      calldata,
+      "--json",
     ]);
     return {
+      protocol: "mochi",
       action: "approve",
+      chainId: "56",
+      to: USDT_CONTRACT,
+      calldata,
+      value: "0",
       shares,
       maxCost,
       gas,
       preview: requirePreview(preview),
       walletAddress: status.walletAddress,
+      sourceUrl: status.sourceUrl,
+      fetchedAt: status.fetchedAt,
     };
   }
 
   const calldata = buildMintCalldata(shares, maxCost);
-  const gas = await estimateGasFee({
-    from: status.walletAddress,
-    to: MINT_CONTRACT,
-    data: calldata,
-    bnbRaw: status.bnbRaw,
-  }, fetchImpl);
+  const gas = await estimateGasFee(
+    {
+      from: status.walletAddress,
+      to: MINT_CONTRACT,
+      data: calldata,
+      bnbRaw: status.bnbRaw,
+    },
+    fetchImpl
+  );
   const preview = await runBawJson([
-    "contract-call", "preview", "--binanceChainId", "56",
-    "--from", status.walletAddress, "--to", MINT_CONTRACT,
-    "--value", "0", "--inputData", calldata, "--json",
+    "contract-call",
+    "preview",
+    "--binanceChainId",
+    "56",
+    "--from",
+    status.walletAddress,
+    "--to",
+    MINT_CONTRACT,
+    "--value",
+    "0",
+    "--inputData",
+    calldata,
+    "--json",
   ]);
   return {
+    protocol: "mochi",
     action: "mint",
+    chainId: "56",
+    to: MINT_CONTRACT,
+    calldata,
+    value: "0",
     shares,
     maxCost,
     gas,
     preview: requirePreview(preview),
     walletAddress: status.walletAddress,
+    sourceUrl: status.sourceUrl,
+    fetchedAt: status.fetchedAt,
   };
 }
 
@@ -267,13 +343,162 @@ function requirePreview(response) {
 }
 
 async function executeMochiPreview({ requestId, runBawJson }) {
-  if (typeof requestId !== "string" || !requestId) throw new Error("Preview requestId tidak valid.");
+  if (typeof requestId !== "string" || !requestId) {
+    throw new Error("Preview requestId tidak valid.");
+  }
   const settings = await runBawJson(["wallet", "settings", "--json"]);
   assertDeveloperMode(settings.data);
-  const response = await runBawJson(["contract-call", "execute", "--requestId", requestId, "--json"]);
-  if (response.success !== true) throw new Error(response.error?.message || "Eksekusi BAW gagal.");
+  const response = await runBawJson([
+    "contract-call",
+    "execute",
+    "--requestId",
+    requestId,
+    "--json",
+  ]);
+  if (response.success !== true) {
+    throw new Error(response.error?.message || "Eksekusi BAW gagal.");
+  }
   return response.data;
 }
+
+function summarizeMochiStatus(status) {
+  const { eligibility, walletAddress, bnbRaw, usdtRaw, allowanceRaw, settings } = status;
+  const reason =
+    Array.isArray(eligibility.reasons) && eligibility.reasons.length
+      ? eligibility.reasons.join(", ")
+      : "tidak ada";
+  const devMode = settings?.devMode?.enabled ? "aktif" : "nonaktif";
+  return [
+    "MOCHI di BNB Chain (Chain ID 56)",
+    `Sumber panduan: ${SITE_URL}/skill.md (diambil: ${status.fetchedAt || new Date().toISOString()})`,
+    `Wallet: ${walletAddress}`,
+    `Mint terbuka: ${eligibility.mintOpen === true ? "ya" : "tidak"}`,
+    `Eligible: ${eligibility.eligible === true ? "ya" : "tidak"} (${reason})`,
+    `Agent ID: ${eligibility.agentId ?? "tidak terdeteksi"}`,
+    `Kuota tersisa: ${eligibility.quotaRemaining ?? 0} share`,
+    `Harga quote share pertama: ${eligibility.firstShareCost ?? "tidak tersedia"} USDT`,
+    `Saldo: ${formatUnits(bnbRaw)} BNB; ${formatUnits(usdtRaw)} USDT`,
+    `Allowance USDT ke kontrak mint: ${formatUnits(allowanceRaw)} USDT`,
+    `Developer Mode: ${devMode}`,
+    `Kontrak mint: ${MINT_CONTRACT}`,
+    `Kontrak USDT: ${USDT_CONTRACT}`,
+    `Kontrak MOCHI: ${MOCHI_CONTRACT}`,
+    "Tidak ada transaksi yang dibuat.",
+  ].join("\n");
+}
+
+function summarizeMochiPreview(prepared) {
+  const { action, shares, maxCost, gas, preview, previewId, expiresAt } = prepared;
+  const lines = [
+    action === "approve" ? "PREVIEW APPROVAL USDT" : "PREVIEW MINT MOCHI",
+    ...(previewId ? [`Preview ID: ${previewId}`] : []),
+    `Wallet: ${prepared.walletAddress}`,
+    `Chain ID: 56 (BNB Smart Chain)`,
+    `Kontrak tujuan: ${action === "approve" ? USDT_CONTRACT : MINT_CONTRACT}`,
+    `Fungsi / Selector: ${
+      action === "approve"
+        ? `approve(address,uint256) (${APPROVE_SELECTOR})`
+        : `mint(uint256,address,uint256) (${MINT_SELECTOR})`
+    }`,
+    action === "approve"
+      ? `Izin tepat: ${formatUnits(maxCost)} USDT untuk kontrak mint ${MINT_CONTRACT}`
+      : `Jumlah: ${shares} share (${shares * 21000000} MOCHI); quote maksimum: ${formatUnits(maxCost)} USDT`,
+    `Estimasi gas + buffer 20%: ${formatUnits(gas.feeRaw)} BNB`,
+    `Simulasi: ${JSON.stringify(preview.simulationResult || {})}`,
+    `Risiko: ${JSON.stringify(preview.risks || {})}`,
+    `Perubahan otorisasi: ${JSON.stringify(
+      preview.authorityChanges || preview.simulationResult?.authorityChanges || []
+    )}`,
+    `Konfirmasi Binance App diperlukan: ${preview.requireConfirmation === true ? "ya" : "tidak"}`,
+    ...(expiresAt ? [`Berlaku hingga: ${new Date(expiresAt).toISOString()}`] : []),
+    "",
+    "Preview ini belum mengirim transaksi.",
+    action === "approve"
+      ? "Catatan: Konfirmasi ini HANYA menyetujui Approval USDT, bukan Mint. Setelah approval selesai, minta preview mint terpisah."
+      : "Catatan: Konfirmasi ini hanya berlaku satu kali untuk preview mint di atas.",
+    previewId
+      ? `Ketik /confirm ${previewId} (atau /confirm) untuk menyetujui transaksi ini, atau /cancel untuk membatalkan.`
+      : "Ketik /confirm untuk menyetujui transaksi ini, atau /cancel untuk membatalkan.",
+  ];
+  return lines.join("\n");
+}
+
+/**
+ * Implementasi antarmuka Protocol Adapter sesuai implementation.md:
+ * discover, checkEligibility, quote, buildTransaction, summarizePreview
+ */
+const mochiProtocolAdapter = {
+  id: "mochi",
+  name: "MOCHI (BNB Smart Chain)",
+  chainId: "56",
+  matches(target = "") {
+    const clean = String(target || "").trim().toLowerCase();
+    return (
+      clean === "mochi" ||
+      clean.includes("agenticmochi.xyz") ||
+      clean === MINT_CONTRACT.toLowerCase() ||
+      clean === MOCHI_CONTRACT.toLowerCase()
+    );
+  },
+  async discover({ fetchImpl = fetch } = {}) {
+    const guide = await fetchMochiGuide(fetchImpl);
+    return {
+      protocol: "mochi",
+      chainId: "56",
+      siteUrl: SITE_URL,
+      guideUrl: `${SITE_URL}/skill.md`,
+      fetchedAt: new Date().toISOString(),
+      contracts: {
+        mint: MINT_CONTRACT,
+        paymentToken: USDT_CONTRACT,
+        token: MOCHI_CONTRACT,
+      },
+      selectors: {
+        mint: MINT_SELECTOR,
+        approve: APPROVE_SELECTOR,
+        quoteFor: QUOTE_FOR_SELECTOR,
+      },
+      guideExcerpt: guide.slice(0, 1500),
+    };
+  },
+  async checkEligibility({ runBawJson, fetchImpl = fetch }) {
+    const status = await getMochiStatus({ runBawJson, fetchImpl });
+    return {
+      ...status,
+      summary: summarizeMochiStatus(status),
+    };
+  },
+  async quote({ shares = 1, runBawJson, fetchImpl = fetch }) {
+    if (!Number.isInteger(Number(shares)) || Number(shares) < 1 || Number(shares) > 10) {
+      throw new Error("Jumlah share harus bilangan bulat 1–10.");
+    }
+    const status = await getMochiStatus({ runBawJson, fetchImpl });
+    const agentId = parseAgentId(status.eligibility.agentId);
+    const maxCost = await quoteMochiCost(agentId, Number(shares), fetchImpl);
+    return {
+      protocol: "mochi",
+      shares: Number(shares),
+      maxCostRaw: maxCost.toString(),
+      maxCostUsdt: formatUnits(maxCost),
+      tokensOut: `${Number(shares) * 21000000} MOCHI`,
+      approvalRequired: status.allowanceRaw < maxCost && maxCost > 0n,
+      walletAddress: status.walletAddress,
+      bnbBalance: formatUnits(status.bnbRaw),
+      usdtBalance: formatUnits(status.usdtRaw),
+      allowanceUsdt: formatUnits(status.allowanceRaw),
+    };
+  },
+  async buildTransaction({ shares = 1, runBawJson, fetchImpl = fetch }) {
+    return prepareMochiTransaction({
+      shares: Number(shares),
+      runBawJson,
+      fetchImpl,
+    });
+  },
+  summarizePreview(prepared) {
+    return summarizeMochiPreview(prepared);
+  },
+};
 
 module.exports = {
   APPROVE_SELECTOR,
@@ -290,4 +515,7 @@ module.exports = {
   formatUnits,
   getMochiStatus,
   prepareMochiTransaction,
+  summarizeMochiStatus,
+  summarizeMochiPreview,
+  mochiProtocolAdapter,
 };

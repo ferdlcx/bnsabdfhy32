@@ -1,0 +1,55 @@
+{
+  "slug": "mochi",
+  "projectName": "MOCHI",
+  "sourceUrl": "https://agenticmochi.xyz/SKILL.md",
+  "version": "1.0.2",
+  "lastUpdated": "2026-10-31T04:36:04.700Z",
+  "network": {
+    "name": "BNB Smart Chain",
+    "chainId": "56"
+  },
+  "apiEndpoints": {
+    "stats": "https://agenticmochi.xyz/api/stats",
+    "verify": "https://agenticmochi.xyz/api/verify?address=<wallet",
+    "activity": "https://agenticmochi.xyz/api/activity"
+  },
+  "contracts": {
+    "mint": "0x045398ef956b4787c782f77319ab0a20cb637da0",
+    "paymentToken": "0x55d398326f99059fF775485246999027B3197955",
+    "token": "0x0Eb18EA6Bd86F994FEC4F3580B5206F972433364",
+    "treasury": "0x17c09Ccd7Aa0A8CA01d4FaD3E00012E2Bb48E3c8"
+  },
+  "functions": [
+    {
+      "signature": "quoteFor(uint256 agentId, uint256 shares)",
+      "selector": "0x207c8371"
+    },
+    {
+      "signature": "quote(uint256 shares)",
+      "selector": "0xed1bd76c"
+    },
+    {
+      "signature": "quoteFor(uint256 agentId, uint256 shares)",
+      "selector": "0x207c8371"
+    },
+    {
+      "signature": "approve(address spender, uint256 amount)",
+      "selector": "0x095ea7b3"
+    },
+    {
+      "signature": "mint(uint256 shares, address referrer, uint256 maxCost)",
+      "selector": "0x836a1040"
+    }
+  ],
+  "requiredConditions": [
+    "Requires .ai Agent ID",
+    "Max 10 shares per transaction",
+    "Quota 10 shares per identity",
+    "Free first share available (maxCost = 0)"
+  ],
+  "adapter": "mochi",
+  "validationStatus": "VALIDATED",
+  "contentHash": "b91deb72cd7a5c0a55f5b90559eba5401b8430d05bea065378ba92088489b809",
+  "validationIssues": [],
+  "validationWarnings": []
+}

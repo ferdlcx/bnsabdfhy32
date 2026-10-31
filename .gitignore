@@ -2,3 +2,8 @@ node_modules/
 .env
 .env.*
 !.env.example
+data/*.log
+data/pending_tx.json
+data/ai_cache.json
+*.pem
+*.key
